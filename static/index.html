@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kestrel Service-Request Router</title>
+  <meta name="description" content="Submit and route Kestrel service requests to the correct team." />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+    :root {
+      --bg-primary: #0f1117;
+      --bg-card: rgba(22, 27, 45, 0.85);
+      --bg-input: rgba(30, 36, 58, 0.9);
+      --border: rgba(99, 115, 164, 0.2);
+      --border-focus: #6366f1;
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.35);
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --success: #22c55e;
+      --success-bg: rgba(34, 197, 94, 0.08);
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.08);
+      --error: #ef4444;
+      --error-bg: rgba(239, 68, 68, 0.08);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 2rem 1rem 4rem;
+      overflow-y: auto;
+    }
+
+    /* Animated gradient background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(
+        circle at 30% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 50%
+      ),
+      radial-gradient(
+        circle at 70% 80%, rgba(34, 197, 94, 0.05) 0%, transparent 50%
+      );
+      animation: bgShift 20s ease-in-out infinite alternate;
+      z-index: -1;
+    }
+
+    @keyframes bgShift {
+      0%   { transform: translate(0, 0) rotate(0deg); }
+      100% { transform: translate(-5%, 5%) rotate(3deg); }
+    }
+
+    .container {
+      width: 100%;
+      max-width: 680px;
+    }
+
+    /* ── Header ──────────────────────────────────────────── */
+    .header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .header .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 0.5rem;
+    }
+
+    .header .logo .icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), #818cf8);
+      font-size: 1.1rem;
+    }
+
+    .header p {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    /* ── Card ─────────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 2rem;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      margin-bottom: 1.5rem;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+
+    .card:hover {
+      border-color: rgba(99, 115, 164, 0.35);
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card h2 .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 8px var(--accent-glow);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%      { opacity: 0.5; }
+    }
+
+    /* ── Form ─────────────────────────────────────────────── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .form-group.full-width {
+      grid-column: 1 / -1;
+    }
+
+    label {
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    input, select, textarea {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.65rem 0.85rem;
+      font-family: inherit;
+      font-size: 0.88rem;
+      color: var(--text-primary);
+      transition: border-color var(--transition), box-shadow var(--transition);
+      outline: none;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 100px;
+      line-height: 1.5;
+    }
+
+    select {
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M1.5 5.5l6.5 5 6.5-5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.75rem center;
+      padding-right: 2rem;
+    }
+
+    /* ── Submit Button ────────────────────────────────────── */
+    .submit-btn {
+      grid-column: 1 / -1;
+      margin-top: 0.5rem;
+      background: linear-gradient(135deg, var(--accent), #818cf8);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 0.8rem;
+      font-family: inherit;
+      font-size: 0.92rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform var(--transition), box-shadow var(--transition), opacity var(--transition);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .submit-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px var(--accent-glow);
+    }
+
+    .submit-btn:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .submit-btn .spinner {
+      display: none;
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin: 0 auto;
+    }
+
+    .submit-btn.loading .btn-text { display: none; }
+    .submit-btn.loading .spinner { display: inline-block; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Result ───────────────────────────────────────────── */
+    .result-card {
+      display: none;
+    }
+
+    .result-card.visible {
+      display: block;
+      animation: slideUp 0.4s ease-out;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .predicted-team {
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #e2e8f0, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .confidence-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.3rem 0.7rem;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .confidence-badge.high {
+      background: var(--success-bg);
+      color: var(--success);
+      border: 1px solid rgba(34, 197, 94, 0.25);
+    }
+
+    .confidence-badge.medium {
+      background: var(--warning-bg);
+      color: var(--warning);
+      border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+
+    .confidence-badge.low {
+      background: var(--error-bg);
+      color: var(--error);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+    }
+
+    .confidence-badge .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .confidence-badge.high .badge-dot   { background: var(--success); }
+    .confidence-badge.medium .badge-dot { background: var(--warning); }
+    .confidence-badge.low .badge-dot    { background: var(--error); }
+
+    .reasons-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    .reasons-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      line-height: 1.55;
+    }
+
+    .reasons-list li .reason-icon {
+      flex-shrink: 0;
+      margin-top: 0.15rem;
+      color: var(--accent);
+      font-size: 0.85rem;
+    }
+
+    /* ── Disclaimer ───────────────────────────────────────── */
+    .disclaimer {
+      background: rgba(245, 158, 11, 0.06);
+      border: 1px solid rgba(245, 158, 11, 0.15);
+      border-radius: var(--radius-sm);
+      padding: 1rem 1.25rem;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .disclaimer strong {
+      color: var(--warning);
+      font-weight: 600;
+    }
+
+    /* ── Error ────────────────────────────────────────────── */
+    .error-banner {
+      display: none;
+      background: var(--error-bg);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      border-radius: var(--radius-sm);
+      padding: 0.8rem 1rem;
+      font-size: 0.85rem;
+      color: var(--error);
+      margin-bottom: 1rem;
+    }
+
+    .error-banner.visible { display: block; }
+
+    .presets-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .preset-chip {
+      background: rgba(99, 102, 241, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: #c7d2fe;
+      padding: 0.35rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all var(--transition);
+      font-family: inherit;
+      font-weight: 500;
+    }
+
+    .preset-chip:hover {
+      background: rgba(99, 102, 241, 0.28);
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    /* ── Responsive ───────────────────────────────────────── */
+    @media (max-width: 520px) {
+      .form-grid { grid-template-columns: 1fr; }
+      .card { padding: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">
+        <span class="icon">⟐</span>
+        <span>Kestrel Router</span>
+      </div>
+      <p>Submit a service request and get an instant routing prediction.</p>
+    </div>
+
+    <!-- Form Card -->
+    <div class="card" id="form-card">
+      <h2><span class="dot"></span> Service Request Intake</h2>
+
+      <!-- Quick presets for immediate one-click testing -->
+      <div style="margin-bottom: 1.25rem;">
+        <label style="display: block; margin-bottom: 0.5rem; font-size: 0.74rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em;">
+          Quick Test Examples (Click to Auto-Fill):
+        </label>
+        <div class="presets-container">
+          <button type="button" class="preset-chip" onclick="loadPreset('repair')">🔧 Repairs (Leak & Fault)</button>
+          <button type="button" class="preset-chip" onclick="loadPreset('billing')">💳 Billing (Double Charged)</button>
+          <button type="button" class="preset-chip" onclick="loadPreset('install')">📦 Installs & Demo (New Unit)</button>
+          <button type="button" class="preset-chip" onclick="loadPreset('returns')">🔄 Returns (Damaged Jar)</button>
+          <button type="button" class="preset-chip" onclick="loadPreset('spares')">🧪 Consumables (Filter Spare)</button>
+          <button type="button" class="preset-chip" onclick="loadPreset('warranty')">🛡️ Warranty (Shield Status)</button>
+          <button type="button" class="preset-chip" onclick="loadPreset('advice')">💡 Product Advice (Settings)</button>
+        </div>
+      </div>
+
+      <form id="predict-form" class="form-grid" autocomplete="off">
+
+        <div class="form-group">
+          <label for="request_id">Request ID</label>
+          <input type="text" id="request_id" name="request_id" placeholder="e.g. SR12345" required />
+        </div>
+
+        <div class="form-group">
+          <label for="created_at_ist">Created At (IST)</label>
+          <input type="datetime-local" id="created_at_ist" name="created_at_ist" required />
+        </div>
+
+        <div class="form-group">
+          <label for="channel">Channel</label>
+          <select id="channel" name="channel" required>
+            <option value="" disabled selected>Select…</option>
+            <option value="ivr">IVR</option>
+            <option value="chat">Chat</option>
+            <option value="whatsapp">WhatsApp</option>
+            <option value="email">Email</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="source">Source</label>
+          <select id="source" name="source" required>
+            <option value="" disabled selected>Select…</option>
+            <option value="crm" selected>CRM</option>
+            <option value="legacy_zoho">Legacy Zoho</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="product_family">Product Family</label>
+          <select id="product_family" name="product_family" required>
+            <option value="" disabled selected>Select…</option>
+            <option value="Air Fryer">Air Fryer</option>
+            <option value="Ceiling Fan">Ceiling Fan</option>
+            <option value="Induction Cooktop">Induction Cooktop</option>
+            <option value="Mixer Grinder">Mixer Grinder</option>
+            <option value="Robot Vacuum">Robot Vacuum</option>
+            <option value="Room Heater">Room Heater</option>
+            <option value="Water Purifier">Water Purifier</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="warranty_status">Warranty Status</label>
+          <select id="warranty_status" name="warranty_status" required>
+            <option value="" disabled selected>Select…</option>
+            <option value="in_warranty">In Warranty</option>
+            <option value="shield">Shield</option>
+            <option value="out_of_warranty">Out of Warranty</option>
+          </select>
+        </div>
+
+        <div class="form-group full-width">
+          <label for="request_text">Request Text</label>
+          <textarea id="request_text" name="request_text" rows="4"
+                    placeholder="Describe the customer's issue…" required></textarea>
+        </div>
+
+        <button type="submit" class="submit-btn" id="submit-btn">
+          <span class="btn-text">Route Request →</span>
+          <span class="spinner"></span>
+        </button>
+      </form>
+    </div>
+
+    <!-- Error Banner -->
+    <div class="error-banner" id="error-banner"></div>
+
+    <!-- Result Card -->
+    <div class="card result-card" id="result-card">
+      <h2><span class="dot"></span> Routing Prediction</h2>
+      <div class="result-header">
+        <span class="predicted-team" id="predicted-team"></span>
+        <span class="confidence-badge" id="confidence-badge">
+          <span class="badge-dot"></span>
+          <span id="confidence-text"></span>
+        </span>
+      </div>
+      <ul class="reasons-list" id="reasons-list"></ul>
+    </div>
+
+    <!-- Disclaimer -->
+    <div class="disclaimer">
+      <strong>⚠ Notice:</strong>
+      Routing suggestion based on historical resolution patterns; human review may be required for ambiguous requests.
+      <div style="margin-top: 0.35rem; font-size: 0.74rem; opacity: 0.85;">
+        Confidence scores are relative decision margins derived from intake features, not calibrated probabilities.
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const form = document.getElementById('predict-form');
+    const btn = document.getElementById('submit-btn');
+    const resultCard = document.getElementById('result-card');
+    const errorBanner = document.getElementById('error-banner');
+
+    const PRESETS = {
+      repair: {
+        request_id: 'SR-REP-101',
+        channel: 'chat',
+        product_family: 'Water Purifier',
+        warranty_status: 'in_warranty',
+        source: 'crm',
+        request_text: 'My water purifier is not turning on and water is leaking continuously from the bottom tank. Error code E02 is flashing on the panel.'
+      },
+      billing: {
+        request_id: 'SR-BIL-102',
+        channel: 'email',
+        product_family: 'Air Fryer',
+        warranty_status: 'in_warranty',
+        source: 'crm',
+        request_text: 'I was charged twice on my credit card for order KO291823. Please verify the double deduction and initiate a refund for the extra charge.'
+      },
+      install: {
+        request_id: 'SR-INS-103',
+        channel: 'ivr',
+        product_family: 'Water Purifier',
+        warranty_status: 'in_warranty',
+        source: 'crm',
+        request_text: 'I received the new water purifier yesterday. Please schedule an installation and wall mounting visit for a technician.'
+      },
+      returns: {
+        request_id: 'SR-RET-104',
+        channel: 'whatsapp',
+        product_family: 'Mixer Grinder',
+        warranty_status: 'in_warranty',
+        source: 'crm',
+        request_text: 'Package arrived with damaged outer packaging and the main stainless steel jar handle is broken. Want to return and exchange for replacement unit.'
+      },
+      spares: {
+        request_id: 'SR-CON-105',
+        channel: 'chat',
+        product_family: 'Water Purifier',
+        warranty_status: 'out_of_warranty',
+        source: 'crm',
+        request_text: 'I need to purchase a replacement RO membrane candle and sediment filter cartridge kit for my water purifier. Purifier is working fine, just need spares.'
+      },
+      warranty: {
+        request_id: 'SR-WAR-106',
+        channel: 'ivr',
+        product_family: 'Induction Cooktop',
+        warranty_status: 'shield',
+        source: 'crm',
+        request_text: 'I want to check my Kestrel Shield warranty claim status and confirm if accidental glass top damage coverage is active.'
+      },
+      advice: {
+        request_id: 'SR-ADV-107',
+        channel: 'chat',
+        product_family: 'Air Fryer',
+        warranty_status: 'in_warranty',
+        source: 'crm',
+        request_text: 'What are the recommended temperature and timer settings for baking and roasting? Can this air fryer safely run on a 1.5 kVA inverter?'
+      }
+    };
+
+    function loadPreset(key) {
+      const p = PRESETS[key];
+      if (!p) return;
+      form.request_id.value = p.request_id;
+      form.channel.value = p.channel;
+      form.product_family.value = p.product_family;
+      form.warranty_status.value = p.warranty_status;
+      form.source.value = p.source;
+      form.request_text.value = p.request_text;
+      resultCard.classList.remove('visible');
+      errorBanner.classList.remove('visible');
+    }
+
+    // Set default created_at_ist to current local time
+    const now = new Date();
+    const offset = now.getTimezoneOffset();
+    const local = new Date(now.getTime() - offset * 60000);
+    document.getElementById('created_at_ist').value = local.toISOString().slice(0, 16);
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      btn.classList.add('loading');
+      btn.disabled = true;
+      resultCard.classList.remove('visible');
+      errorBanner.classList.remove('visible');
+
+      const data = {
+        request_id: form.request_id.value.trim(),
+        created_at_ist: form.created_at_ist.value,
+        channel: form.channel.value,
+        product_family: form.product_family.value,
+        warranty_status: form.warranty_status.value,
+        request_text: form.request_text.value.trim(),
+        source: form.source.value,
+      };
+
+      try {
+        const res = await fetch('/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: res.statusText }));
+          throw new Error(err.detail || `HTTP ${res.status}`);
+        }
+
+        const result = await res.json();
+        renderResult(result);
+      } catch (err) {
+        errorBanner.textContent = `Error: ${err.message}`;
+        errorBanner.classList.add('visible');
+      } finally {
+        btn.classList.remove('loading');
+        btn.disabled = false;
+      }
+    });
+
+    function renderResult(result) {
+      document.getElementById('predicted-team').textContent = result.predicted_team;
+
+      const badge = document.getElementById('confidence-badge');
+      const conf = result.confidence.toLowerCase();
+      badge.className = `confidence-badge ${conf}`;
+      document.getElementById('confidence-text').textContent = result.confidence;
+
+      const list = document.getElementById('reasons-list');
+      list.innerHTML = '';
+      result.reasons.forEach((r) => {
+        const li = document.createElement('li');
+        li.innerHTML = `<span class="reason-icon">›</span><span>${escapeHtml(r)}</span>`;
+        list.appendChild(li);
+      });
+
+      resultCard.classList.add('visible');
+      resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function escapeHtml(str) {
+      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+      return str.replace(/[&<>"']/g, (m) => map[m]);
+    }
+  </script>
+</body>
+</html>
